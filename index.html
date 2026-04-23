@@ -4,13 +4,62 @@
   <meta charset="UTF-8">
   <title>Consilium</title>
   <style>
-    body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
-    h1 { font-size: 24px; }
-    p { color: #666; }
+    body { font-family: sans-serif; max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+    h1 { font-size: 24px; margin-bottom: 20px; }
+    textarea { width: 100%; height: 80px; padding: 10px; font-size: 14px; box-sizing: border-box; }
+    button { margin-top: 10px; padding: 10px 24px; font-size: 14px; cursor: pointer; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 30px; }
+    .card { border: 1px solid #ddd; padding: 16px; border-radius: 6px; }
+    .card h2 { font-size: 14px; margin: 0 0 10px; color: #333; }
+    .card p { font-size: 14px; color: #444; white-space: pre-wrap; min-height: 60px; }
+    .loading { color: #999; }
   </style>
 </head>
 <body>
   <h1>Consilium</h1>
-  <p>AI-консилиум запускается.</p>
+  <textarea id="prompt" placeholder="Введи вопрос..."></textarea>
+  <button onclick="ask()">Спросить</button>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Claude</h2>
+      <p id="claude-out">—</p>
+    </div>
+    <div class="card">
+      <h2>GPT-4o</h2>
+      <p id="openai-out">—</p>
+    </div>
+    <div class="card">
+      <h2>Gemini</h2>
+      <p id="gemini-out">—</p>
+    </div>
+  </div>
+
+  <script>
+    async function ask() {
+      const prompt = document.getElementById('prompt').value.trim();
+      if (!prompt) return;
+
+      ['claude', 'openai', 'gemini'].forEach(m => {
+        document.getElementById(m + '-out').textContent = 'Загрузка...';
+        document.getElementById(m + '-out').className = 'loading';
+      });
+
+      const call = async (model) => {
+        const res = await fetch(`/api/${model}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        const data = await res.json();
+        document.getElementById(model + '-out').textContent = data.text;
+        document.getElementById(model + '-out').className = '';
+      };
+
+      call('claude');
+      call('openai');
+      call('gemini');
+    }
+  </script>
 </body>
 </html>
