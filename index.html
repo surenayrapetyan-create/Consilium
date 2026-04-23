@@ -6,20 +6,30 @@
   <style>
     body { font-family: sans-serif; max-width: 1100px; margin: 40px auto; padding: 0 20px; }
     h1 { font-size: 24px; margin-bottom: 20px; }
+    .modes { display: flex; gap: 10px; margin-bottom: 20px; }
+    .modes button { padding: 8px 20px; font-size: 14px; cursor: pointer; border: 1px solid #ddd; background: #fff; border-radius: 4px; }
+    .modes button.active { background: #333; color: #fff; border-color: #333; }
     textarea { width: 100%; height: 80px; padding: 10px; font-size: 14px; box-sizing: border-box; }
     button { margin-top: 10px; padding: 10px 24px; font-size: 14px; cursor: pointer; }
     .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 30px; }
     .card { border: 1px solid #ddd; padding: 16px; border-radius: 6px; }
     .card h2 { font-size: 14px; margin: 0 0 10px; color: #333; }
     .card p { font-size: 14px; color: #444; white-space: pre-wrap; min-height: 60px; }
-    .chairman { border: 2px solid #333; padding: 20px; border-radius: 6px; margin-top: 24px; }
-    .chairman h2 { font-size: 16px; margin: 0 0 12px; }
-    .chairman p { font-size: 14px; color: #444; white-space: pre-wrap; min-height: 40px; }
+    .arbitr { border: 2px solid #333; padding: 20px; border-radius: 6px; margin-top: 24px; }
+    .arbitr h2 { font-size: 16px; margin: 0 0 12px; }
+    .arbitr p { font-size: 14px; color: #444; white-space: pre-wrap; min-height: 40px; }
     .loading { color: #999; }
   </style>
 </head>
 <body>
   <h1>Consilium</h1>
+
+  <div class="modes">
+    <button class="active" onclick="setMode('panel', this)">Панель</button>
+    <button onclick="setMode('analysis', this)">Анализ</button>
+    <button onclick="setMode('debate', this)">Дебаты</button>
+  </div>
+
   <textarea id="prompt" placeholder="Введи вопрос..."></textarea>
   <button onclick="ask()">Спросить</button>
 
@@ -38,17 +48,25 @@
     </div>
   </div>
 
-  <div class="chairman">
-    <h2>Chairman</h2>
-    <p id="chairman-out">—</p>
+  <div class="arbitr">
+    <h2>Арбитр</h2>
+    <p id="arbitr-out">—</p>
   </div>
 
   <script>
+    let currentMode = 'panel';
+
+    function setMode(mode, btn) {
+      currentMode = mode;
+      document.querySelectorAll('.modes button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
     async function ask() {
       const prompt = document.getElementById('prompt').value.trim();
       if (!prompt) return;
 
-      ['claude', 'openai', 'gemini', 'chairman'].forEach(m => {
+      ['claude', 'openai', 'gemini', 'arbitr'].forEach(m => {
         document.getElementById(m + '-out').textContent = 'Загрузка...';
         document.getElementById(m + '-out').className = 'loading';
       });
@@ -74,11 +92,11 @@
       const res = await fetch('/api/chairman', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, claude, openai, gemini })
+        body: JSON.stringify({ prompt, claude, openai, gemini, mode: currentMode })
       });
       const data = await res.json();
-      document.getElementById('chairman-out').textContent = data.text;
-      document.getElementById('chairman-out').className = '';
+      document.getElementById('arbitr-out').textContent = data.text;
+      document.getElementById('arbitr-out').className = '';
     }
   </script>
 </body>
