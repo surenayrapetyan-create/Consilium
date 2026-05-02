@@ -1,1 +1,174 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Consilium — Фаза 1</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+  <div class="max-w-4xl mx-auto p-8">
+    <h1 class="text-4xl font-bold mb-2">Consilium</h1>
+    <p class="text-zinc-400 mb-8">Штурм важных вопросов • Фаза 1</p>
 
+    <div id="form" class="space-y-8">
+      <div>
+        <label class="block text-sm font-medium mb-2">1. Что я уже думаю про этот вопрос? <span class="text-red-500">*</span></label>
+        <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none" placeholder="Обязательное поле. Если не можешь сформулировать — это тревога, а не сомнение."></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-2">2. Контекст ситуации</label>
+        <textarea id="context" rows="3" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-2">3. Что произойдёт, если решу неправильно?</label>
+        <textarea id="consequences" rows="2" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-2">4. Конкретный вопрос</label>
+        <textarea id="question" rows="2" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none"></textarea>
+      </div>
+
+      <button onclick="startStorm()" 
+              id="launchBtn"
+              class="w-full bg-violet-600 hover:bg-violet-700 py-6 text-xl font-semibold rounded-3xl flex items-center justify-center gap-3 transition-all">
+        <i class="fas fa-rocket"></i>
+        ЗАПУСТИТЬ ШТУРМ
+      </button>
+    </div>
+
+    <!-- Результат -->
+    <div id="result" class="hidden mt-12">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-semibold">Результат синтеза</h2>
+        <button onclick="copyResult()" class="flex items-center gap-2 text-violet-400 hover:text-violet-300">
+          <i class="fas fa-copy"></i> Скопировать
+        </button>
+      </div>
+      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 whitespace-pre-wrap text-zinc-200 leading-relaxed min-h-[400px]"></div>
+      
+      <button onclick="resetForm()" 
+              class="mt-8 text-zinc-400 hover:text-white flex items-center gap-2">
+        <i class="fas fa-arrow-left"></i> Новый штурм
+      </button>
+    </div>
+  </div>
+
+  <script>
+    async function startStorm() {
+      const thoughts = document.getElementById('thoughts').value.trim();
+      if (!thoughts) {
+        alert('Заполни обязательное поле «Что я уже думаю» — это фильтр тревоги/сомнения');
+        return;
+      }
+
+      const context = document.getElementById('context').value.trim();
+      const consequences = document.getElementById('consequences').value.trim();
+      const question = document.getElementById('question').value.trim();
+
+      const userInput = { thoughts, context, consequences, question };
+
+      // Показываем процесс
+      document.getElementById('form').classList.add('hidden');
+      const resultDiv = document.getElementById('result');
+      resultDiv.classList.remove('hidden');
+      const synthesisDiv = document.getElementById('synthesis');
+      synthesisDiv.innerHTML = `
+        <div class="flex items-center justify-center h-80">
+          <div class="text-center">
+            <i class="fas fa-spinner fa-spin text-5xl text-violet-500 mb-4"></i>
+            <p class="text-zinc-400">Запускаем трёх экспертов...</p>
+          </div>
+        </div>`;
+
+      // Параллельные вызовы экспертов
+      const expertCalls = [
+        fetch('/api/claude', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: buildExpertPrompt(userInput)}) }),
+        fetch('/api/openai', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: buildExpertPrompt(userInput)}) }),
+        fetch('/api/gemini', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: buildExpertPrompt(userInput)}) })
+      ];
+
+      let responses = [];
+      let failed = [];
+
+      const results = await Promise.allSettled(expertCalls);
+
+      results.forEach((result, i) => {
+        const modelNames = ['Claude', 'GPT', 'Gemini'];
+        if (result.status === 'fulfilled' && result.value.ok) {
+          result.value.json().then(data => {
+            responses.push({model: modelNames[i], text: data.text || data.content});
+          });
+        } else {
+          failed.push(modelNames[i]);
+        }
+      });
+
+      // Ждём, пока все промисы json() выполнятся
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      if (responses.length < 2) {
+        synthesisDiv.innerHTML = `<p class="text-red-400">Ошибка: удалось получить меньше 2 ответов от экспертов.<br>Проверь API-ключи и попробуй позже.</p>`;
+        return;
+      }
+
+      // Анонимизация: перетасовка
+      const labels = ['A', 'B', 'C'];
+      const shuffledResponses = responses
+        .sort(() => Math.random() - 0.5)
+        .map((r, i) => ({label: labels[i], ...r}));
+
+      // Вызываем арбитра
+      const chairmanRes = await fetch('/api/chairman', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          userInput: userInput,
+          expertResponses: Object.fromEntries(shuffledResponses.map(r => [r.label, r.text])),
+          failedModels: failed
+        })
+      });
+
+      if (!chairmanRes.ok) {
+        synthesisDiv.innerHTML = `<p class="text-red-400">Ошибка арбитра</p>`;
+        return;
+      }
+
+      const final = await chairmanRes.json();
+      synthesisDiv.innerHTML = final.synthesis.replace(/\n/g, '<br>');
+    }
+
+    function buildExpertPrompt(userInput) {
+      return `Что я уже думаю: ${userInput.thoughts}\n\nКонтекст: ${userInput.context}\n\nЧто произойдёт при ошибке: ${userInput.consequences}\n\nВопрос: ${userInput.question}\n\n[Экспертный промпт из спецификации Фазы 1]`;
+    }
+
+    function copyResult() {
+      const text = document.getElementById('synthesis').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = event.currentTarget;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Скопировано!';
+        setTimeout(() => btn.innerHTML = original, 2000);
+      });
+    }
+
+    function resetForm() {
+      document.getElementById('form').classList.remove('hidden');
+      document.getElementById('result').classList.add('hidden');
+      document.getElementById('thoughts').value = '';
+      document.getElementById('context').value = '';
+      document.getElementById('consequences').value = '';
+      document.getElementById('question').value = '';
+    }
+
+    // Инициализация Tailwind
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('%cConsilium Фаза 1 загружена', 'color: violet; font-size: 14px');
+    });
+  </script>
+</body>
+</html>
