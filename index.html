@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Consilium — Фаза 1</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body class="bg-[#0f0f0f] text-zinc-100 min-h-screen">
   <div class="max-w-3xl mx-auto p-8">
@@ -15,7 +14,6 @@
     </div>
 
     <div id="form" class="space-y-8">
-      <!-- Поля -->
       <div>
         <label class="block text-sm font-medium mb-2 text-zinc-400">1. Что я уже думаю? <span class="text-red-500">*</span></label>
         <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
@@ -33,16 +31,6 @@
         <textarea id="question" rows="2" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
       </div>
 
-      <!-- Выбор моделей -->
-      <div class="bg-zinc-900 border border-zinc-700 rounded-3xl p-5">
-        <p class="text-sm font-medium text-zinc-400 mb-3">Какие модели участвуют в штурме:</p>
-        <div class="grid grid-cols-3 gap-3">
-          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="claude" checked class="w-4 h-4 accent-violet-500"> Claude</label>
-          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="gpt" checked class="w-4 h-4 accent-violet-500"> GPT-4o</label>
-          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="gemini" class="w-4 h-4 accent-violet-500"> Gemini 3.1 Pro</label>
-        </div>
-      </div>
-
       <button onclick="startStorm()" class="w-full bg-violet-600 hover:bg-violet-700 py-6 text-xl font-semibold rounded-3xl flex items-center justify-center gap-3">
         <i class="fas fa-rocket"></i> ЗАПУСТИТЬ ШТУРМ
       </button>
@@ -51,11 +39,7 @@
     <div id="result" class="hidden mt-12">
       <h2 class="text-2xl font-semibold mb-6">Штурм запущен...</h2>
       <div id="progress" class="space-y-3 mb-8"></div>
-      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 leading-relaxed text-zinc-200 min-h-[400px] whitespace-pre-wrap"></div>
-
-      <button onclick="resetForm()" class="mt-8 flex items-center gap-2 text-zinc-400 hover:text-white">
-        <i class="fas fa-arrow-left"></i> Новый штурм
-      </button>
+      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 min-h-[420px] whitespace-pre-wrap text-zinc-200"></div>
     </div>
   </div>
 
@@ -71,45 +55,39 @@
         question: document.getElementById('question').value.trim()
       };
 
-      // Выбранные модели
-      const selectedModels = [];
-      if (document.getElementById('claude').checked) selectedModels.push({name: 'Claude', url: '/api/claude'});
-      if (document.getElementById('gpt').checked) selectedModels.push({name: 'GPT-4o', url: '/api/openai'});
-      if (document.getElementById('gemini').checked) selectedModels.push({name: 'Gemini 3.1 Pro', url: '/api/gemini'});
-
-      if (selectedModels.length < 2) return alert('Выбери минимум 2 модели');
-
       document.getElementById('form').classList.add('hidden');
       const resultDiv = document.getElementById('result');
       const progressDiv = document.getElementById('progress');
       const synthesisDiv = document.getElementById('synthesis');
       resultDiv.classList.remove('hidden');
       progressDiv.innerHTML = '';
-      synthesisDiv.innerHTML = '';
+      synthesisDiv.innerHTML = '<p class="text-violet-400">Получаем ответы моделей...</p>';
+
+      const models = [
+        {name: 'Claude', url: '/api/claude'},
+        {name: 'GPT-4o', url: '/api/openai'}
+      ];
 
       let responses = [];
       let failed = [];
 
-      for (let model of selectedModels) {
+      for (let model of models) {
         const item = document.createElement('div');
         item.className = "flex items-center gap-3 bg-zinc-900 border border-zinc-700 rounded-2xl p-4";
-        item.innerHTML = `<i class="fas fa-spinner fa-spin text-violet-500"></i><span class="font-medium">${model.name}</span><span class="text-zinc-500 text-sm ml-auto">думает...</span>`;
+        item.innerHTML = `<i class="fas fa-spinner fa-spin text-violet-500"></i><span class="font-medium">${model.name}</span><span class="text-zinc-500 ml-auto">думает...</span>`;
         progressDiv.appendChild(item);
 
         try {
           const res = await fetch(model.url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ prompt: buildExpertPrompt(userInput) })
+            body: JSON.stringify({prompt: buildExpertPrompt(userInput)})
           });
-
           if (res.ok) {
             const data = await res.json();
             responses.push({model: model.name, text: data.text});
             item.innerHTML = `<i class="fas fa-check text-green-500"></i><span class="font-medium">${model.name}</span><span class="text-green-400 ml-auto">готово</span>`;
-          } else {
-            throw new Error();
-          }
+          } else throw new Error();
         } catch {
           failed.push(model.name);
           item.innerHTML = `<i class="fas fa-xmark text-red-500"></i><span class="font-medium">${model.name}</span><span class="text-red-400 ml-auto">ошибка</span>`;
@@ -117,36 +95,40 @@
       }
 
       if (responses.length < 2) {
-        synthesisDiv.innerHTML = `<p class="text-red-400">Не удалось получить минимум 2 ответа от экспертов.</p>`;
+        synthesisDiv.innerHTML = '<p class="text-red-400">Не удалось получить 2 ответа от экспертов.</p>';
         return;
       }
 
-      // Анонимизация
-      const labels = responses.map((_, i) => String.fromCharCode(65 + i));
-      const shuffled = responses.sort(() => Math.random() - 0.5).map((r, i) => ({label: labels[i], text: r.text}));
-      const expertResponses = {};
-      shuffled.forEach(r => expertResponses[r.label] = r.text);
+      // === АРБИТР ===
+      synthesisDiv.innerHTML = '<p class="text-violet-400">Арбитр анализирует ответы...</p>';
 
-      // Арбитр
-      const chairmanRes = await fetch('/api/chairman', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ userInput, expertResponses, failedModels: failed })
-      });
+      try {
+        const labels = ['A', 'B'];
+        const shuffled = responses.sort(() => Math.random() - 0.5).map((r, i) => ({label: labels[i], text: r.text}));
+        const expertResponses = {};
+        shuffled.forEach(r => expertResponses[r.label] = r.text);
 
-      const final = await chairmanRes.json();
-      synthesisDiv.innerHTML = final.synthesis.replace(/\n/g, '<br>');
+        const chairmanRes = await fetch('/api/chairman', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({userInput, expertResponses, failedModels: failed})
+        });
+
+        const final = await chairmanRes.json();
+        console.log("Ответ от арбитра:", final);   // ← видно в консоли браузера (F12)
+
+        if (final.synthesis && final.synthesis.trim() !== '') {
+          synthesisDiv.innerHTML = final.synthesis.replace(/\n/g, '<br>');
+        } else {
+          synthesisDiv.innerHTML = `<p class="text-amber-400">Арбитр вернул пустой результат.</p><pre class="text-xs mt-4 bg-black p-4 rounded-2xl">${JSON.stringify(final, null, 2)}</pre>`;
+        }
+      } catch (e) {
+        synthesisDiv.innerHTML = `<p class="text-red-400">Ошибка арбитра: ${e.message}</p>`;
+      }
     }
 
     function buildExpertPrompt(userInput) {
-      return `Ты — один из независимых экспертов в Консилиуме...
-
-**Что я уже думаю:** ${userInput.thoughts}
-**Контекст:** ${userInput.context}
-**Что произойдёт при ошибке:** ${userInput.consequences}
-**Вопрос:** ${userInput.question}
-
-Думай шаг за шагом, называй допущения, будь честен и полезен.`;
+      return `Что я уже думаю: ${userInput.thoughts}\nКонтекст: ${userInput.context}\nЧто произойдёт при ошибке: ${userInput.consequences}\nВопрос: ${userInput.question}`;
     }
 
     function resetForm() {
