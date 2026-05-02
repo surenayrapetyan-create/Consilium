@@ -14,16 +14,13 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-5.5',                    // ← самая новая модель
         messages: [
-          { 
-            role: 'system', 
-            content: 'Ты — эксперт высокого уровня в Консилиуме. Думай глубоко и честно.' 
-          },
+          { role: 'system', content: 'Ты — эксперт высокого уровня в Консилиуме. Думай глубоко и честно.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_completion_tokens: 4000,   // ← исправлено (вместо max_tokens)
+        max_completion_tokens: 3000,         // ← уменьшили для скорости
       }),
     });
 
@@ -32,7 +29,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ 
       text: data.choices[0].message.content,
-      model: 'GPT' 
+      model: 'GPT-5.5' 
     });
   } catch (error) {
     console.error(error);
