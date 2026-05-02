@@ -59,6 +59,36 @@
   </div>
 
   <script>
+    function buildExpertPrompt(userInput) {
+      return `Ты — один из трёх независимых экспертов в Консилиуме. Пользователь использует этот инструмент для высококачественного штурма важных вопросов, где цена ошибки реальна и значительна.
+
+Пользователь уже сформулировал свою позицию. Вот вся информация:
+
+**Что я уже думаю по этому вопросу:**
+${userInput.thoughts}
+
+**Контекст:**
+${userInput.context}
+
+**Что произойдёт, если я приму неправильное решение:**
+${userInput.consequences}
+
+**Конкретный вопрос:**
+${userInput.question}
+
+Твоя задача — дать максимально глубокий, честный и полезный анализ.
+
+Обязательные правила:
+1. Думай шаг за шагом и показывай ход рассуждений.
+2. Явно называй все ключевые допущения.
+3. Чётко разделяй: твёрдые факты / надёжную экстраполяцию / предположения и спекуляции.
+4. Прямо реагируй на позицию пользователя («Что я уже думаю»): соглашайся, дополняй или мягко оспаривай с обоснованием.
+5. Будь интеллектуально честен: если чего-то не знаешь — говори прямо.
+6. Будь практически полезен именно в этой ситуации с учётом реальных последствий ошибки.
+
+Отвечай независимо. Не пытайся угадывать, что скажут другие эксперты.`;
+    }
+
     async function startStorm() {
       const thoughts = document.getElementById('thoughts').value.trim();
       if (!thoughts) {
@@ -81,46 +111,45 @@
         <div class="flex items-center justify-center h-80">
           <div class="text-center">
             <i class="fas fa-spinner fa-spin text-5xl text-violet-500 mb-4"></i>
-            <p class="text-zinc-400">Запускаем трёх экспертов...</p>
+            <p class="text-zinc-400">Запускаем трёх экспертов + арбитра...</p>
           </div>
         </div>`;
 
-      // Параллельные вызовы экспертов
+      const expertPrompt = buildExpertPrompt(userInput);
+
       const expertCalls = [
-        fetch('/api/claude', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: buildExpertPrompt(userInput)}) }),
-        fetch('/api/openai', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: buildExpertPrompt(userInput)}) }),
-        fetch('/api/gemini', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: buildExpertPrompt(userInput)}) })
+        fetch('/api/claude', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: expertPrompt}) }),
+        fetch('/api/openai', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: expertPrompt}) }),
+        fetch('/api/gemini', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: expertPrompt}) })
       ];
 
+      const results = await Promise.allSettled(expertCalls);
       let responses = [];
       let failed = [];
 
-      const results = await Promise.allSettled(expertCalls);
-
-      results.forEach((result, i) => {
+      for (let i = 0; i < results.length; i++) {
         const modelNames = ['Claude', 'GPT', 'Gemini'];
-        if (result.status === 'fulfilled' && result.value.ok) {
-          result.value.json().then(data => {
-            responses.push({model: modelNames[i], text: data.text || data.content});
-          });
+        if (results[i].status === 'fulfilled' && results[i].value.ok) {
+          const data = await results[i].value.json();
+          responses.push({model: modelNames[i], text: data.text});
         } else {
           failed.push(modelNames[i]);
         }
-      });
-
-      // Ждём, пока все промисы json() выполнятся
-      await new Promise(resolve => setTimeout(resolve, 800));
+      }
 
       if (responses.length < 2) {
         synthesisDiv.innerHTML = `<p class="text-red-400">Ошибка: удалось получить меньше 2 ответов от экспертов.<br>Проверь API-ключи и попробуй позже.</p>`;
         return;
       }
 
-      // Анонимизация: перетасовка
+      // Анонимизация (перетасовка)
       const labels = ['A', 'B', 'C'];
-      const shuffledResponses = responses
+      const shuffled = responses
         .sort(() => Math.random() - 0.5)
-        .map((r, i) => ({label: labels[i], ...r}));
+        .map((r, i) => ({label: labels[i], text: r.text}));
+
+      const expertResponses = {};
+      shuffled.forEach(r => expertResponses[r.label] = r.text);
 
       // Вызываем арбитра
       const chairmanRes = await fetch('/api/chairman', {
@@ -128,22 +157,18 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           userInput: userInput,
-          expertResponses: Object.fromEntries(shuffledResponses.map(r => [r.label, r.text])),
+          expertResponses: expertResponses,
           failedModels: failed
         })
       });
 
       if (!chairmanRes.ok) {
-        synthesisDiv.innerHTML = `<p class="text-red-400">Ошибка арбитра</p>`;
+        synthesisDiv.innerHTML = `<p class="text-red-400">Ошибка арбитра. Попробуй ещё раз.</p>`;
         return;
       }
 
       const final = await chairmanRes.json();
       synthesisDiv.innerHTML = final.synthesis.replace(/\n/g, '<br>');
-    }
-
-    function buildExpertPrompt(userInput) {
-      return `Что я уже думаю: ${userInput.thoughts}\n\nКонтекст: ${userInput.context}\n\nЧто произойдёт при ошибке: ${userInput.consequences}\n\nВопрос: ${userInput.question}\n\n[Экспертный промпт из спецификации Фазы 1]`;
     }
 
     function copyResult() {
@@ -165,10 +190,7 @@
       document.getElementById('question').value = '';
     }
 
-    // Инициализация Tailwind
-    document.addEventListener('DOMContentLoaded', () => {
-      console.log('%cConsilium Фаза 1 загружена', 'color: violet; font-size: 14px');
-    });
+    console.log('%cConsilium Фаза 1 загружена и готова к работе', 'color: #a78bfa; font-size: 14px');
   </script>
 </body>
 </html>
