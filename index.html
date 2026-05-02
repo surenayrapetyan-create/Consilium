@@ -15,26 +15,22 @@
     <div id="form" class="space-y-8">
       <div>
         <label class="block text-sm font-medium mb-2">1. Что я уже думаю про этот вопрос? <span class="text-red-500">*</span></label>
-        <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none" placeholder="Обязательное поле. Если не можешь сформулировать — это тревога, а не сомнение."></textarea>
+        <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none" placeholder="Обязательное поле..."></textarea>
       </div>
-
       <div>
         <label class="block text-sm font-medium mb-2">2. Контекст ситуации</label>
         <textarea id="context" rows="3" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none"></textarea>
       </div>
-
       <div>
         <label class="block text-sm font-medium mb-2">3. Что произойдёт, если решу неправильно?</label>
         <textarea id="consequences" rows="2" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none"></textarea>
       </div>
-
       <div>
         <label class="block text-sm font-medium mb-2">4. Конкретный вопрос</label>
         <textarea id="question" rows="2" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl p-4 focus:outline-none focus:border-violet-500 resize-none"></textarea>
       </div>
 
-      <button onclick="startStorm()" 
-              class="w-full bg-violet-600 hover:bg-violet-700 py-6 text-xl font-semibold rounded-3xl flex items-center justify-center gap-3 transition-all">
+      <button onclick="startStorm()" class="w-full bg-violet-600 hover:bg-violet-700 py-6 text-xl font-semibold rounded-3xl flex items-center justify-center gap-3">
         <i class="fas fa-rocket"></i>
         ЗАПУСТИТЬ ШТУРМ
       </button>
@@ -42,50 +38,113 @@
 
     <div id="result" class="hidden mt-12">
       <div class="flex justify-between items-center mb-4">
-        <h2 class="text-2xl font-semibold">Результат</h2>
-        <button onclick="resetForm()" class="flex items-center gap-2 text-zinc-400 hover:text-white">
+        <h2 class="text-2xl font-semibold">Диагностика + Результат</h2>
+        <button onclick="resetForm()" class="flex items-center gap-2 text-zinc-400 hover:text-white text-sm">
           <i class="fas fa-arrow-left"></i> Новый штурм
         </button>
       </div>
-      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 min-h-[400px] whitespace-pre-wrap text-zinc-200"></div>
+      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 min-h-[500px] whitespace-pre-wrap text-zinc-200 font-mono text-sm"></div>
+      
+      <div class="mt-4 text-center">
+        <button onclick="clearAll()" class="text-red-400 hover:text-red-300 text-sm underline">Очистить всю форму</button>
+      </div>
     </div>
   </div>
 
   <script>
+    const expertPromptTemplate = `Ты — один из трёх независимых экспертов в Консилиуме... (полный промпт из спецификации Фазы 1)`;
+
     async function startStorm() {
       const thoughts = document.getElementById('thoughts').value.trim();
       if (!thoughts) return alert('Заполни обязательное поле «Что я уже думаю»');
 
       const userInput = {
-        thoughts,
+        thoughts: thoughts,
         context: document.getElementById('context').value.trim(),
         consequences: document.getElementById('consequences').value.trim(),
         question: document.getElementById('question').value.trim()
       };
 
       document.getElementById('form').classList.add('hidden');
-      const synthesisDiv = document.getElementById('synthesis');
       const resultDiv = document.getElementById('result');
+      const synthesisDiv = document.getElementById('synthesis');
       resultDiv.classList.remove('hidden');
 
-      synthesisDiv.innerHTML = `<p class="text-violet-400">Запускаем экспертов...</p>`;
+      synthesisDiv.innerHTML = `<p class="text-violet-400">Запускаем Claude, GPT и Gemini...</p>`;
 
-      const expertPrompt = `Ты — один из трёх независимых экспертов в Консилиуме. ...` + // (полный промпт эксперта как раньше)
+      const fullPrompt = expertPromptTemplate +
         `\n\n**Что я уже думаю:** ${userInput.thoughts}\n**Контекст:** ${userInput.context}\n**Последствия ошибки:** ${userInput.consequences}\n**Вопрос:** ${userInput.question}`;
 
-      // ... (остальная логика с диагностикой ошибок остаётся такой же, как в предыдущей версии)
+      const models = [
+        { name: 'Claude', url: '/api/claude' },
+        { name: 'GPT',    url: '/api/openai' },
+        { name: 'Gemini', url: '/api/gemini' }
+      ];
 
-      // Для краткости здесь пропущена полная диагностика — если нужно, скажи, я дам полную версию с подробными ошибками.
+      let resultsHTML = '<h3 class="text-lg mb-3">Результаты вызовов моделей:</h3>';
+      let successfulResponses = [];
+      let errors = [];
+
+      for (let model of models) {
+        try {
+          const res = await fetch(model.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: fullPrompt })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            successfulResponses.push({ label: model.name, text: data.text });
+            resultsHTML += `<p class="text-green-400">✅ ${model.name} — успешно</p>`;
+          } else {
+            const errorText = await res.text();
+            errors.push(`${model.name}: ${res.status} ${errorText.substring(0, 150)}`);
+            resultsHTML += `<p class="text-red-400">❌ ${model.name}: ${res.status}</p>`;
+          }
+        } catch (e) {
+          errors.push(`${model.name}: Network / CORS error — ${e.message}`);
+          resultsHTML += `<p class="text-red-400">❌ ${model.name}: Network error</p>`;
+        }
+      }
+
+      synthesisDiv.innerHTML = resultsHTML;
+
+      if (successfulResponses.length < 2) {
+        synthesisDiv.innerHTML += `<p class="text-red-400 mt-8 font-bold">Не удалось получить минимум 2 ответа.<br>Исправь ошибки выше.</p>`;
+        return;
+      }
+
+      // Анонимизация и арбитр (как раньше)
+      const labels = ['A', 'B', 'C'];
+      const shuffled = successfulResponses.sort(() => Math.random() - 0.5).map((r, i) => ({label: labels[i], text: r.text}));
+      const expertResponses = {};
+      shuffled.forEach(r => expertResponses[r.label] = r.text);
+
+      const chairmanRes = await fetch('/api/chairman', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ userInput, expertResponses, failedModels: errors })
+      });
+
+      const final = await chairmanRes.json();
+      synthesisDiv.innerHTML += `<div class="mt-8 border-t pt-6 border-zinc-600">${final.synthesis.replace(/\n/g, '<br>')}</div>`;
     }
 
     function resetForm() {
-      // Главное изменение: теперь НЕ очищаем поля!
       document.getElementById('form').classList.remove('hidden');
       document.getElementById('result').classList.add('hidden');
-      // Поля остаются заполненными
+      // Поля НЕ очищаются — контекст сохраняется
     }
 
-    console.log('%cConsilium Фаза 1 — контекст теперь сохраняется', 'color: #a78bfa');
+    function clearAll() {
+      if (confirm('Очистить все поля?')) {
+        document.getElementById('thoughts').value = '';
+        document.getElementById('context').value = '';
+        document.getElementById('consequences').value = '';
+        document.getElementById('question').value = '';
+      }
+    }
   </script>
 </body>
 </html>
