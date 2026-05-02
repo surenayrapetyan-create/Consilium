@@ -2,9 +2,7 @@ export default async function handler(req, res) {
   const { prompt } = req.body;
   const apiKey = process.env.OPENAI_API_KEY;
 
-  if (!apiKey) {
-    return res.status(500).json({ error: 'OPENAI_API_KEY not set' });
-  }
+  if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not set' });
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -14,25 +12,24 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5.5',                    // ← самая новая модель
+        model: 'gpt-4o',
         messages: [
-          { role: 'system', content: 'Ты — эксперт высокого уровня в Консилиуме. Думай глубоко и честно.' },
+          { role: 'system', content: 'Ты — эксперт высокого уровня в Консилиуме.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_completion_tokens: 3000,         // ← уменьшили для скорости
+        max_completion_tokens: 3000,
       }),
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'OpenAI API error');
+    if (!response.ok) throw new Error(data.error?.message || 'OpenAI error');
 
     return res.status(200).json({ 
       text: data.choices[0].message.content,
-      model: 'GPT-5.5' 
+      model: 'GPT-4o' 
     });
   } catch (error) {
-    console.error(error);
     return res.status(500).json({ error: error.message });
   }
 }
