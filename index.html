@@ -9,27 +9,38 @@
 </head>
 <body class="bg-[#0f0f0f] text-zinc-100 min-h-screen">
   <div class="max-w-3xl mx-auto p-8">
-    <div class="flex items-center gap-3 mb-10">
+    <div class="flex items-center gap-3 mb-8">
       <h1 class="text-4xl font-semibold tracking-tighter">Consilium</h1>
       <span class="px-3 py-1 text-xs bg-violet-500/10 text-violet-400 rounded-3xl">Фаза 1</span>
     </div>
 
     <div id="form" class="space-y-8">
+      <!-- Поля -->
       <div>
         <label class="block text-sm font-medium mb-2 text-zinc-400">1. Что я уже думаю? <span class="text-red-500">*</span></label>
-        <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg"></textarea>
+        <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
       </div>
       <div>
         <label class="block text-sm font-medium mb-2 text-zinc-400">2. Контекст</label>
-        <textarea id="context" rows="3" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg"></textarea>
+        <textarea id="context" rows="3" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
       </div>
       <div>
         <label class="block text-sm font-medium mb-2 text-zinc-400">3. Что будет при ошибке?</label>
-        <textarea id="consequences" rows="2" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg"></textarea>
+        <textarea id="consequences" rows="2" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
       </div>
       <div>
         <label class="block text-sm font-medium mb-2 text-zinc-400">4. Конкретный вопрос</label>
-        <textarea id="question" rows="2" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg"></textarea>
+        <textarea id="question" rows="2" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
+      </div>
+
+      <!-- Выбор моделей -->
+      <div class="bg-zinc-900 border border-zinc-700 rounded-3xl p-5">
+        <p class="text-sm font-medium text-zinc-400 mb-3">Какие модели участвуют в штурме:</p>
+        <div class="grid grid-cols-3 gap-3">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="claude" checked class="w-4 h-4 accent-violet-500"> Claude</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="gpt" checked class="w-4 h-4 accent-violet-500"> GPT-4o</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="gemini" class="w-4 h-4 accent-violet-500"> Gemini 3.1 Pro</label>
+        </div>
       </div>
 
       <button onclick="startStorm()" class="w-full bg-violet-600 hover:bg-violet-700 py-6 text-xl font-semibold rounded-3xl flex items-center justify-center gap-3">
@@ -40,7 +51,11 @@
     <div id="result" class="hidden mt-12">
       <h2 class="text-2xl font-semibold mb-6">Штурм запущен...</h2>
       <div id="progress" class="space-y-3 mb-8"></div>
-      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 min-h-[400px] whitespace-pre-wrap text-zinc-200"></div>
+      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 leading-relaxed text-zinc-200 min-h-[400px] whitespace-pre-wrap"></div>
+
+      <button onclick="resetForm()" class="mt-8 flex items-center gap-2 text-zinc-400 hover:text-white">
+        <i class="fas fa-arrow-left"></i> Новый штурм
+      </button>
     </div>
   </div>
 
@@ -56,24 +71,26 @@
         question: document.getElementById('question').value.trim()
       };
 
+      // Выбранные модели
+      const selectedModels = [];
+      if (document.getElementById('claude').checked) selectedModels.push({name: 'Claude', url: '/api/claude'});
+      if (document.getElementById('gpt').checked) selectedModels.push({name: 'GPT-4o', url: '/api/openai'});
+      if (document.getElementById('gemini').checked) selectedModels.push({name: 'Gemini 3.1 Pro', url: '/api/gemini'});
+
+      if (selectedModels.length < 2) return alert('Выбери минимум 2 модели');
+
       document.getElementById('form').classList.add('hidden');
       const resultDiv = document.getElementById('result');
       const progressDiv = document.getElementById('progress');
       const synthesisDiv = document.getElementById('synthesis');
-
       resultDiv.classList.remove('hidden');
       progressDiv.innerHTML = '';
       synthesisDiv.innerHTML = '';
 
-      const models = [
-        { name: 'Claude', url: '/api/claude' },
-        { name: 'GPT-4o', url: '/api/openai' }
-      ];
-
       let responses = [];
       let failed = [];
 
-      for (let model of models) {
+      for (let model of selectedModels) {
         const item = document.createElement('div');
         item.className = "flex items-center gap-3 bg-zinc-900 border border-zinc-700 rounded-2xl p-4";
         item.innerHTML = `<i class="fas fa-spinner fa-spin text-violet-500"></i><span class="font-medium">${model.name}</span><span class="text-zinc-500 text-sm ml-auto">думает...</span>`;
@@ -83,7 +100,7 @@
           const res = await fetch(model.url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ prompt: `Что я уже думаю: ${userInput.thoughts}\nКонтекст: ${userInput.context}\nПоследствия: ${userInput.consequences}\nВопрос: ${userInput.question}` })
+            body: JSON.stringify({ prompt: buildExpertPrompt(userInput) })
           });
 
           if (res.ok) {
@@ -100,16 +117,17 @@
       }
 
       if (responses.length < 2) {
-        synthesisDiv.innerHTML = `<p class="text-red-400">Не удалось получить 2 ответа.</p>`;
+        synthesisDiv.innerHTML = `<p class="text-red-400">Не удалось получить минимум 2 ответа от экспертов.</p>`;
         return;
       }
 
-      // Арбитр
-      const labels = ['A', 'B'];
+      // Анонимизация
+      const labels = responses.map((_, i) => String.fromCharCode(65 + i));
       const shuffled = responses.sort(() => Math.random() - 0.5).map((r, i) => ({label: labels[i], text: r.text}));
       const expertResponses = {};
       shuffled.forEach(r => expertResponses[r.label] = r.text);
 
+      // Арбитр
       const chairmanRes = await fetch('/api/chairman', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -118,6 +136,17 @@
 
       const final = await chairmanRes.json();
       synthesisDiv.innerHTML = final.synthesis.replace(/\n/g, '<br>');
+    }
+
+    function buildExpertPrompt(userInput) {
+      return `Ты — один из независимых экспертов в Консилиуме...
+
+**Что я уже думаю:** ${userInput.thoughts}
+**Контекст:** ${userInput.context}
+**Что произойдёт при ошибке:** ${userInput.consequences}
+**Вопрос:** ${userInput.question}
+
+Думай шаг за шагом, называй допущения, будь честен и полезен.`;
     }
 
     function resetForm() {
