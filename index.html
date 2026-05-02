@@ -5,65 +5,174 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Consilium — Фаза 1</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .claude-bg { background: #0f0f0f; }
+    .input-focus { transition: all 0.2s; }
+    .input-focus:focus { border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.2); }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 p-8">
-  <div class="max-w-4xl mx-auto">
-    <h1 class="text-4xl font-bold mb-2">Consilium</h1>
-    <p class="text-zinc-400 mb-8">Фаза 1 • Диагностика API</p>
+<body class="claude-bg text-zinc-100 min-h-screen">
+  <div class="max-w-3xl mx-auto p-8">
+    <div class="flex items-center gap-3 mb-8">
+      <h1 class="text-4xl font-semibold tracking-tight">Consilium</h1>
+      <span class="px-3 py-1 text-xs font-medium bg-violet-500/10 text-violet-400 rounded-full">Фаза 1</span>
+    </div>
 
-    <div id="form">
-      <div class="mb-4">
-        <label class="block text-sm mb-1">1. Что я уже думаю? <span class="text-red-500">*</span></label>
-        <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-4"></textarea>
+    <div id="form" class="space-y-8">
+      <div>
+        <label class="block text-sm font-medium mb-2 text-zinc-400">1. Что я уже думаю про этот вопрос? <span class="text-red-500">*</span></label>
+        <textarea id="thoughts" rows="4" class="input-focus w-full bg-zinc-900 border border-zinc-700 rounded-3xl p-5 text-lg focus:outline-none resize-none" placeholder="Обязательное поле..."></textarea>
       </div>
-      <button onclick="startStorm()" class="w-full bg-violet-600 hover:bg-violet-700 py-5 text-xl rounded-2xl">
+
+      <div>
+        <label class="block text-sm font-medium mb-2 text-zinc-400">2. Контекст ситуации</label>
+        <textarea id="context" rows="3" class="input-focus w-full bg-zinc-900 border border-zinc-700 rounded-3xl p-5 text-lg focus:outline-none resize-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-2 text-zinc-400">3. Что произойдёт, если решу неправильно?</label>
+        <textarea id="consequences" rows="2" class="input-focus w-full bg-zinc-900 border border-zinc-700 rounded-3xl p-5 text-lg focus:outline-none resize-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-2 text-zinc-400">4. Конкретный вопрос</label>
+        <textarea id="question" rows="2" class="input-focus w-full bg-zinc-900 border border-zinc-700 rounded-3xl p-5 text-lg focus:outline-none resize-none"></textarea>
+      </div>
+
+      <button onclick="startStorm()" 
+              class="w-full bg-violet-600 hover:bg-violet-700 py-6 text-xl font-semibold rounded-3xl flex items-center justify-center gap-3 transition-all active:scale-[0.98]">
+        <i class="fas fa-rocket"></i>
         ЗАПУСТИТЬ ШТУРМ
       </button>
     </div>
 
     <div id="result" class="hidden mt-12">
-      <h2 class="text-xl mb-4">Диагностика моделей</h2>
-      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 text-sm whitespace-pre-wrap font-mono"></div>
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-semibold">Результат синтеза</h2>
+        <button onclick="resetForm()" class="flex items-center gap-2 text-zinc-400 hover:text-white">
+          <i class="fas fa-arrow-left"></i> Новый штурм
+        </button>
+      </div>
+      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 leading-relaxed text-zinc-200 min-h-[400px] whitespace-pre-wrap"></div>
     </div>
   </div>
 
   <script>
+    // Полный промпт эксперта
+    function buildExpertPrompt(userInput) {
+      return `Ты — один из трёх независимых экспертов в Консилиуме. Пользователь использует этот инструмент для высококачественного штурма важных вопросов, где цена ошибки реальна и значительна.
+
+**Что я уже думаю по этому вопросу:**
+${userInput.thoughts}
+
+**Контекст:**
+${userInput.context}
+
+**Что произойдёт, если я приму неправильное решение:**
+${userInput.consequences}
+
+**Конкретный вопрос:**
+${userInput.question}
+
+Твоя задача — дать максимально глубокий, честный и полезный анализ.
+
+Обязательные правила:
+1. Думай шаг за шагом и показывай ход рассуждений.
+2. Явно называй все ключевые допущения.
+3. Чётко разделяй: твёрдые факты / надёжную экстраполяцию / предположения.
+4. Прямо реагируй на мою текущую позицию.
+5. Будь интеллектуально честен.
+6. Будь практически полезен с учётом реальных последствий.`;
+    }
+
     async function startStorm() {
       const thoughts = document.getElementById('thoughts').value.trim();
-      if (!thoughts) return alert('Заполни первое поле');
+      if (!thoughts) return alert('Заполни обязательное поле «Что я уже думаю»');
 
-      const prompt = "Тестовый промпт Consilium";
+      const userInput = {
+        thoughts,
+        context: document.getElementById('context').value.trim(),
+        consequences: document.getElementById('consequences').value.trim(),
+        question: document.getElementById('question').value.trim()
+      };
 
       document.getElementById('form').classList.add('hidden');
       const resultDiv = document.getElementById('result');
-      const output = document.getElementById('synthesis');
+      const synthesisDiv = document.getElementById('synthesis');
       resultDiv.classList.remove('hidden');
 
-      output.innerHTML = "Проверяем модели...\n\n";
+      synthesisDiv.innerHTML = `<div class="flex items-center justify-center h-80"><i class="fas fa-spinner fa-spin text-6xl text-violet-500"></i></div>`;
 
-      const models = [
-        {name: 'Claude', url: '/api/claude'},
-        {name: 'GPT',    url: '/api/openai'},
-        {name: 'Gemini', url: '/api/gemini'}
+      const expertPrompt = buildExpertPrompt(userInput);
+
+      // Вызов трёх экспертов
+      const calls = [
+        fetch('/api/claude', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: expertPrompt}) }),
+        fetch('/api/openai', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: expertPrompt}) }),
+        fetch('/api/gemini', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: expertPrompt}) })
       ];
 
-      for (let m of models) {
-        try {
-          const res = await fetch(m.url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({prompt})
-          });
-          if (res.ok) {
-            output.innerHTML += `✅ ${m.name} — успешно\n`;
-          } else {
-            output.innerHTML += `❌ ${m.name} — ошибка ${res.status}\n`;
-          }
-        } catch (e) {
-          output.innerHTML += `❌ ${m.name} — не удалось подключиться\n`;
+      const results = await Promise.allSettled(calls);
+      let responses = [];
+      let failed = [];
+
+      for (let i = 0; i < results.length; i++) {
+        const modelNames = ['Claude', 'GPT', 'Gemini'];
+        if (results[i].status === 'fulfilled' && results[i].value.ok) {
+          const data = await results[i].value.json();
+          responses.push({model: modelNames[i], text: data.text});
+        } else {
+          failed.push(modelNames[i]);
         }
       }
+
+      if (responses.length < 2) {
+        synthesisDiv.innerHTML = `<p class="text-red-400">Не удалось получить минимум 2 ответа от экспертов.</p>`;
+        return;
+      }
+
+      // Анонимизация
+      const labels = ['A', 'B', 'C'];
+      const shuffled = responses.sort(() => Math.random() - 0.5).map((r, i) => ({label: labels[i], text: r.text}));
+      const expertResponses = {};
+      shuffled.forEach(r => expertResponses[r.label] = r.text);
+
+      // Арбитр
+      const chairmanRes = await fetch('/api/chairman', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ userInput, expertResponses, failedModels: failed })
+      });
+
+      const final = await chairmanRes.json();
+      synthesisDiv.innerHTML = final.synthesis.replace(/\n/g, '<br>');
     }
+
+    // Запуск по Enter
+    function addEnterSupport() {
+      const fields = ['thoughts', 'context', 'consequences', 'question'];
+      fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              startStorm();
+            }
+          });
+        }
+      });
+    }
+
+    function resetForm() {
+      document.getElementById('form').classList.remove('hidden');
+      document.getElementById('result').classList.add('hidden');
+    }
+
+    // Инициализация
+    window.onload = addEnterSupport;
   </script>
 </body>
 </html>
