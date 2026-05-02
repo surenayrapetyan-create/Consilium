@@ -6,52 +6,170 @@
   <title>Consilium — Фаза 1</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .progress-bar { transition: all 0.3s ease; }
+  </style>
 </head>
 <body class="bg-[#0f0f0f] text-zinc-100 min-h-screen">
   <div class="max-w-3xl mx-auto p-8">
-    <div class="flex items-center gap-3 mb-8">
-      <h1 class="text-4xl font-semibold">Consilium</h1>
-      <span class="px-3 py-1 text-xs bg-violet-500/10 text-violet-400 rounded-full">Фаза 1</span>
+    <div class="flex items-center gap-3 mb-10">
+      <h1 class="text-4xl font-semibold tracking-tighter">Consilium</h1>
+      <span class="px-3 py-1 text-xs font-medium bg-violet-500/10 text-violet-400 rounded-3xl">Фаза 1</span>
     </div>
 
     <div id="form" class="space-y-8">
-      <!-- 4 поля (те же) -->
       <div>
-        <label class="block text-sm font-medium mb-2 text-zinc-400">1. Что я уже думаю? <span class="text-red-500">*</span></label>
-        <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 rounded-3xl p-5 text-lg focus:outline-none focus:border-violet-500"></textarea>
+        <label class="block text-sm font-medium mb-2 text-zinc-400">1. Что я уже думаю про этот вопрос? <span class="text-red-500">*</span></label>
+        <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
       </div>
       <div>
-        <label class="block text-sm font-medium mb-2 text-zinc-400">2. Контекст</label>
-        <textarea id="context" rows="3" class="w-full bg-zinc-900 border border-zinc-700 rounded-3xl p-5 text-lg focus:outline-none focus:border-violet-500"></textarea>
+        <label class="block text-sm font-medium mb-2 text-zinc-400">2. Контекст ситуации</label>
+        <textarea id="context" rows="3" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
       </div>
       <div>
-        <label class="block text-sm font-medium mb-2 text-zinc-400">3. Что будет при ошибке?</label>
-        <textarea id="consequences" rows="2" class="w-full bg-zinc-900 border border-zinc-700 rounded-3xl p-5 text-lg focus:outline-none focus:border-violet-500"></textarea>
+        <label class="block text-sm font-medium mb-2 text-zinc-400">3. Что произойдёт, если решу неправильно?</label>
+        <textarea id="consequences" rows="2" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
       </div>
       <div>
         <label class="block text-sm font-medium mb-2 text-zinc-400">4. Конкретный вопрос</label>
-        <textarea id="question" rows="2" class="w-full bg-zinc-900 border border-zinc-700 rounded-3xl p-5 text-lg focus:outline-none focus:border-violet-500"></textarea>
+        <textarea id="question" rows="2" class="w-full bg-zinc-900 border border-zinc-700 focus:border-violet-500 rounded-3xl p-5 text-lg resize-none"></textarea>
       </div>
 
-      <button onclick="startStorm()" class="w-full bg-violet-600 hover:bg-violet-700 py-6 text-xl font-semibold rounded-3xl flex items-center justify-center gap-3">
+      <button onclick="startStorm()" 
+              class="w-full bg-violet-600 hover:bg-violet-700 py-6 text-xl font-semibold rounded-3xl flex items-center justify-center gap-3 transition-all">
         <i class="fas fa-rocket"></i>
         ЗАПУСТИТЬ ШТУРМ
       </button>
     </div>
 
+    <!-- Прогресс + Результат -->
     <div id="result" class="hidden mt-12">
-      <div class="mb-6">
-        <h2 class="text-2xl font-semibold mb-4">Штурм в процессе...</h2>
-        <div id="progress" class="space-y-3"></div>
-      </div>
-      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 leading-relaxed text-zinc-200 min-h-[400px] whitespace-pre-wrap"></div>
+      <h2 class="text-2xl font-semibold mb-6">Штурм запущен...</h2>
+      
+      <div id="progress" class="space-y-4 mb-8"></div>
+      
+      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 leading-relaxed text-zinc-200 min-h-[420px] whitespace-pre-wrap"></div>
+
+      <button onclick="resetForm()" 
+              class="mt-8 flex items-center gap-2 text-zinc-400 hover:text-white">
+        <i class="fas fa-arrow-left"></i> Новый штурм
+      </button>
     </div>
   </div>
 
   <script>
-    // ... (полный код с прогрессом и Enter — я могу дать его полностью, если нужно)
+    function buildExpertPrompt(userInput) {
+      return `Ты — один из трёх независимых экспертов в Консилиуме...
 
-    // Для экономии места скажи «index.html готов» после обновления api-файлов — я сразу дам полный красивый index.html с прогресс-баром.
+**Что я уже думаю:** ${userInput.thoughts}
+**Контекст:** ${userInput.context}
+**Что произойдёт при ошибке:** ${userInput.consequences}
+**Вопрос:** ${userInput.question}
+
+Думай глубоко, честно и полезно.`;
+    }
+
+    async function startStorm() {
+      const thoughts = document.getElementById('thoughts').value.trim();
+      if (!thoughts) return alert('Заполни обязательное поле 1');
+
+      const userInput = {
+        thoughts,
+        context: document.getElementById('context').value.trim(),
+        consequences: document.getElementById('consequences').value.trim(),
+        question: document.getElementById('question').value.trim()
+      };
+
+      document.getElementById('form').classList.add('hidden');
+      const resultDiv = document.getElementById('result');
+      resultDiv.classList.remove('hidden');
+
+      const progressDiv = document.getElementById('progress');
+      const synthesisDiv = document.getElementById('synthesis');
+      progressDiv.innerHTML = '';
+      synthesisDiv.innerHTML = '';
+
+      const models = [
+        { name: 'Claude', url: '/api/claude' },
+        { name: 'GPT-5.5', url: '/api/openai' },
+        { name: 'Gemini 3.1 Pro', url: '/api/gemini' }
+      ];
+
+      let responses = [];
+      let failed = [];
+
+      // Прогресс-бар
+      for (let model of models) {
+        const item = document.createElement('div');
+        item.className = "flex items-center gap-3 bg-zinc-900 border border-zinc-700 rounded-2xl p-4";
+        item.innerHTML = `
+          <i class="fas fa-spinner fa-spin text-violet-500"></i>
+          <span class="font-medium">${model.name}</span>
+          <span class="text-zinc-500 text-sm ml-auto">думает...</span>
+        `;
+        progressDiv.appendChild(item);
+
+        try {
+          const res = await fetch(model.url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ prompt: buildExpertPrompt(userInput) })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            responses.push({model: model.name, text: data.text});
+            item.innerHTML = `<i class="fas fa-check text-green-500"></i><span class="font-medium">${model.name}</span><span class="text-green-500 text-sm ml-auto">готово</span>`;
+          } else {
+            throw new Error();
+          }
+        } catch {
+          failed.push(model.name);
+          item.innerHTML = `<i class="fas fa-xmark text-red-500"></i><span class="font-medium">${model.name}</span><span class="text-red-400 text-sm ml-auto">ошибка</span>`;
+        }
+      }
+
+      if (responses.length < 2) {
+        synthesisDiv.innerHTML = `<p class="text-red-400">Не удалось получить минимум 2 ответа от экспертов.</p>`;
+        return;
+      }
+
+      // Анонимизация + арбитр
+      const labels = ['A', 'B', 'C'];
+      const shuffled = responses.sort(() => Math.random() - 0.5).map((r, i) => ({label: labels[i], text: r.text}));
+      const expertResponses = {};
+      shuffled.forEach(r => expertResponses[r.label] = r.text);
+
+      const chairmanRes = await fetch('/api/chairman', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ userInput, expertResponses, failedModels: failed })
+      });
+
+      const final = await chairmanRes.json();
+      synthesisDiv.innerHTML = final.synthesis.replace(/\n/g, '<br>');
+    }
+
+    // Enter для запуска
+    function enableEnter() {
+      ['thoughts','context','consequences','question'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('keypress', e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            startStorm();
+          }
+        });
+      });
+    }
+
+    function resetForm() {
+      document.getElementById('form').classList.remove('hidden');
+      document.getElementById('result').classList.add('hidden');
+    }
+
+    window.onload = enableEnter;
   </script>
 </body>
 </html>
