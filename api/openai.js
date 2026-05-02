@@ -14,7 +14,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5.4',
+        model: 'gpt-4o',
         messages: [
           { 
             role: 'system', 
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 4000,
+        max_completion_tokens: 4000,   // ← исправлено (вместо max_tokens)
       }),
     });
 
