@@ -15,9 +15,9 @@ export default async function handler(req, res) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-7', // 
+        model: 'claude-opus-4-7',
         max_tokens: 4000,
-        temperature: 0.7,
+        // temperature убрали — он вызывает deprecated error на этой модели
         system: prompt.split('\n\n')[0] || 'Ты — эксперт высокого уровня в Консилиуме.',
         messages: [{ role: 'user', content: prompt }],
       }),
