@@ -6,77 +6,46 @@
   <title>Consilium — Фаза 1</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-8">
+<body class="bg-zinc-950 text-zinc-100 p-8">
   <div class="max-w-4xl mx-auto">
     <h1 class="text-4xl font-bold mb-2">Consilium</h1>
-    <p class="text-zinc-400 mb-8">Фаза 1 • Диагностика</p>
+    <p class="text-zinc-400 mb-8">Фаза 1 • Диагностика API</p>
 
-    <div id="form" class="space-y-6">
-      <div>
+    <div id="form">
+      <div class="mb-4">
         <label class="block text-sm mb-1">1. Что я уже думаю? <span class="text-red-500">*</span></label>
         <textarea id="thoughts" rows="4" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-4"></textarea>
       </div>
-      <div>
-        <label class="block text-sm mb-1">2. Контекст</label>
-        <textarea id="context" rows="3" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-4"></textarea>
-      </div>
-      <div>
-        <label class="block text-sm mb-1">3. Что будет при ошибке?</label>
-        <textarea id="consequences" rows="2" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-4"></textarea>
-      </div>
-      <div>
-        <label class="block text-sm mb-1">4. Конкретный вопрос</label>
-        <textarea id="question" rows="2" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-4"></textarea>
-      </div>
-
-      <button onclick="startStorm()" class="w-full bg-violet-600 hover:bg-violet-700 py-5 text-xl font-medium rounded-2xl">
+      <button onclick="startStorm()" class="w-full bg-violet-600 hover:bg-violet-700 py-5 text-xl rounded-2xl">
         ЗАПУСТИТЬ ШТУРМ
       </button>
     </div>
 
     <div id="result" class="hidden mt-12">
-      <div class="flex justify-between mb-4">
-        <h2 class="text-xl font-semibold">Диагностика</h2>
-        <button onclick="resetForm()" class="text-zinc-400 hover:text-white">Новый штурм</button>
-      </div>
-      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 text-sm font-mono whitespace-pre-wrap"></div>
+      <h2 class="text-xl mb-4">Диагностика моделей</h2>
+      <div id="synthesis" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 text-sm whitespace-pre-wrap font-mono"></div>
     </div>
   </div>
 
   <script>
     async function startStorm() {
       const thoughts = document.getElementById('thoughts').value.trim();
-      if (!thoughts) return alert('Заполни поле 1 — это обязательно');
+      if (!thoughts) return alert('Заполни первое поле');
 
-      const userInput = {
-        thoughts,
-        context: document.getElementById('context').value.trim(),
-        consequences: document.getElementById('consequences').value.trim(),
-        question: document.getElementById('question').value.trim()
-      };
+      const prompt = "Тестовый промпт Consilium";
 
       document.getElementById('form').classList.add('hidden');
       const resultDiv = document.getElementById('result');
       const output = document.getElementById('synthesis');
       resultDiv.classList.remove('hidden');
 
-      output.innerHTML = 'Запускаем 3 модели...\n\n';
-
-      const prompt = `Ты — один из трёх независимых экспертов в Консилиуме...
-
-**Что я уже думаю:** ${userInput.thoughts}
-**Контекст:** ${userInput.context}
-**Что произойдёт при ошибке:** ${userInput.consequences}
-**Вопрос:** ${userInput.question}`;
+      output.innerHTML = "Проверяем модели...\n\n";
 
       const models = [
         {name: 'Claude', url: '/api/claude'},
-        {name: 'GPT', url: '/api/openai'},
+        {name: 'GPT',    url: '/api/openai'},
         {name: 'Gemini', url: '/api/gemini'}
       ];
-
-      let success = 0;
-      let log = '';
 
       for (let m of models) {
         try {
@@ -85,35 +54,15 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({prompt})
           });
-
           if (res.ok) {
-            const data = await res.json();
-            success++;
-            log += `✅ ${m.name} — OK\n`;
+            output.innerHTML += `✅ ${m.name} — успешно\n`;
           } else {
-            const err = await res.text();
-            log += `❌ ${m.name} — ${res.status} ${err.substring(0,120)}\n`;
+            output.innerHTML += `❌ ${m.name} — ошибка ${res.status}\n`;
           }
         } catch (e) {
-          log += `❌ ${m.name} — Network error: ${e.message}\n`;
+          output.innerHTML += `❌ ${m.name} — не удалось подключиться\n`;
         }
       }
-
-      output.innerHTML = log + `\nУспешно: ${success}/3\n`;
-
-      if (success < 2) {
-        output.innerHTML += `\n\nНе хватает ответов для арбитра. Исправь ошибки выше.`;
-        return;
-      }
-
-      // Здесь будет вызов арбитра (пока пропускаем, чтобы увидеть ошибки)
-      output.innerHTML += `\n\n✅ Минимум 2 модели ответили — арбитр должен работать.`;
-    }
-
-    function resetForm() {
-      document.getElementById('form').classList.remove('hidden');
-      document.getElementById('result').classList.add('hidden');
-      // поля НЕ очищаются
     }
   </script>
 </body>
